@@ -1,0 +1,54 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy.stats import genpareto
+import yfinance as yf
+
+#  Download S&P 500 Data
+data = yf.download('^NSEI', start='2010-01-01', end='2025-12-31')
+prices = data['Close'].dropna()
+
+# Calculate Daily Returns and Convert to Losses
+returns = prices.pct_change().dropna()
+losses = -returns  # we model extreme losses (left tail)
+
+# Set Threshold and Get Exceedances
+threshold = np.quantile(losses, 0.95)  # 95th percentile threshold
+exceedances = losses[losses > threshold] - threshold  # shifted to zero
+exceedances = exceedances.to_numpy()
+
+# Ensure no NaNs or non-finite values
+exceedances = exceedances[np.isfinite(exceedances)]
+
+# Fit Generalized Pareto Distribution (GPD)
+xi, loc, beta = genpareto.fit(exceedances, floc=0)  # fix location at 0
+
+print(f"GPD Shape (xi): {xi:.4f}")
+print(f"GPD Scale (beta): {beta:.4f}")
+
+# Plot Tail Fit
+x = np.linspace(0, exceedances.max(), 100)
+pdf = genpareto.pdf(x, c=xi, loc=0, scale=beta)
+
+plt.figure(figsize=(10, 12))
+sns.histplot(exceedances, bins=40, stat='density', color='skyblue', label='Empirical')
+plt.plot(x, pdf, 'r-', label='GPD Fit')
+plt.title('GPD Fit to Tail Exceedances')
+plt.xlabel('Exceedance (Loss above threshold)')
+plt.ylabel('Density')
+plt.legend()
+plt.show()
+
+# Step 7: EVT VaR and TVaR at 99%
+confidence_level = 0.99
+n_total = len(losses)
+n_exceed = len(exceedances)
+
+var_99 = threshold + (beta / xi) * (((n_total / n_exceed) * (1 - confidence_level)) ** (-xi) - 1)
+tvar_99 = (var_99 + beta - xi * threshold) / (1 - xi)
+
+print(f"EVT VaR (99%): {(var_99)*100:.2f}%")
+print(f"EVT TVaR (99%): {(tvar_99)*100:.2f}%")
+
+
