@@ -1,0 +1,77 @@
+
+import numpy as np
+import yfinance as yf
+import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
+import seaborn as sns
+
+# Downloading stock data
+stock_name = 'AMZN'
+end_date = datetime.today()
+n_years = 5
+start_date = end_date - timedelta(days=n_years * 365)
+stock_data = yf.download(stock_name, start=start_date, end=end_date)
+stock_prices = stock_data['Close']
+
+# Return and Volatility Calculation
+log_returns = np.log(stock_prices / stock_prices.shift(1)).dropna()
+
+rolling_window_days = 21
+volatility = log_returns.rolling(window=rolling_window_days).std() * np.sqrt(252)
+
+# Ensure S0 is a scalar (convert last known price to a float)
+S0 = stock_prices.iloc[-1].item()
+
+# Get latest volatility as a float
+vol = volatility.iloc[-1].item()
+
+# Risk-free rate (assumption)
+R = 0.02
+T = 1  # Forecasting period (1 year)
+n_time_intervals = 300  # Number of time steps
+N_sim = 10000  # Number of Monte Carlo simulations
+delta_t = T / n_time_intervals  # Time step size
+
+# Initialize simulation array
+S_fwd = np.zeros((n_time_intervals, N_sim))
+S_fwd[0, :] = S0  # Start all simulations from S0
+
+# Simulating stock price paths using Geometric Brownian Motion
+for t in range(1, n_time_intervals):
+    random_shocks = np.random.standard_normal(size=N_sim)  # Random noise for simulations
+    S_fwd[t, :] = S_fwd[t - 1, :] * np.exp(
+        (R - 0.5 * vol ** 2) * delta_t + vol * np.sqrt(delta_t) * random_shocks
+    )
+
+# Compute expected percentage change
+delta_stock_price = (S_fwd[-1, :].mean() - S0) / S0
+delta_stock_price_percentage = '{:.2%}'.format(delta_stock_price)
+
+# Print forecast result
+print('Stock Price Forecast:', delta_stock_price_percentage)
+
+# Visualizing results
+
+log_returns.plot(figsize=(10,5), color='green')
+plt.title('Log Returns')
+plt.show()
+
+volatility.plot(figsize=(10,5), color = 'red')
+plt.title('Volatility')
+plt.show()
+
+plt.figure(figsize=(10, 5))
+plt.plot(S_fwd[:, :200])
+plt.xlabel('Days in the future')
+plt.ylabel('Stock Price')
+plt.title('Stock Price Simulation')
+plt.show()
+
+
+plt.figure()
+sns.histplot(S_fwd[-1, :], bins=100, color='orange', edgecolor='black', linewidth=0.8)
+plt.axvline(S_fwd[-1, :].mean(), color='green', linestyle='dashed', linewidth=2)
+plt.xlabel('Stock Price')
+plt.ylabel('Frequency')
+plt.title('Distribution of Final Stock Prices')
+plt.show()
