@@ -1,0 +1,71 @@
+
+import numpy as np
+import yfinance as yf
+import matplotlib.pyplot as plt
+
+# Downloading stock data
+ticker = "BTC-USD"
+data = yf.download(ticker, start="2021-01-01", end="2025-01-01")
+short_ma = 5
+long_ma = 12
+fee = 0.0005
+risk_free_rate = 0.02
+
+# Coding technical analysis signals
+data['MA'+str(short_ma)] = data['Close'].rolling(short_ma).mean()
+data['MA'+str(long_ma)] = data['Close'].rolling(long_ma).mean()
+data['return'] = data['Close'].pct_change()
+
+# Simulating trading strategies
+start = long_ma
+data['signal'] = (data['MA'+str(short_ma)] > data['MA'+str(long_ma)]).astype(int)
+
+BnH_return = np.array(data['return'][start+1:])
+MACD_return = np.array(data['return'][start+1:]) * np.array(data['signal'][start+1:])
+
+BnH_cum_return = np.cumprod(1 + BnH_return)  # Correct cumulative return
+MACD_cum_return = np.cumprod(1 + MACD_return)
+
+BnH = np.prod(1+BnH_return)**(252/len(BnH_return))-1
+MACD = np.prod(1+MACD_return)**(252/len(MACD_return))-1
+BnH_risk = np.std(BnH_return)*(252)**(1/2)
+MACD_risk = np.std(MACD_return)*(252)**(1/2)
+
+# Drawdown Calculation
+def max_drawdown(returns):
+    cum_returns = np.cumprod(1 + returns)
+    peak = np.maximum.accumulate(cum_returns)
+    drawdown = (cum_returns - peak) / peak
+    return np.min(drawdown)  # Max drawdown is the lowest point
+
+BnH_drawdown = max_drawdown(BnH_return)
+MACD_drawdown = max_drawdown(MACD_return)
+
+# Sharpe Ratio Calculation
+def sharpe_ratio(returns, risk_free_rate):
+    excess_return = np.mean(returns) - (risk_free_rate / 252)  # Daily risk-free rate
+    return excess_return / np.std(returns) * np.sqrt(252)  # Annualized Sharpe ratio
+
+BnH_sharpe = sharpe_ratio(BnH_return, risk_free_rate)
+MACD_sharpe = sharpe_ratio(MACD_return, risk_free_rate)
+
+# Visualizing the results
+plt.figure(figsize=(12, 6))
+plt.plot(np.arange(len(BnH_cum_return)), BnH_cum_return, label="Buy & Hold", color='blue')
+plt.plot(np.arange(len(MACD_cum_return)), MACD_cum_return, label="MACD Strategy", color='red')
+plt.xlabel("Days")
+plt.ylabel("Cumulative Return")
+plt.title("Cumulative Return of Buy & Hold vs. MACD Strategy")
+plt.legend()
+plt.grid()
+plt.show()
+import numpy as np
+import yfinance as yf
+import matplotlib.pyplot as plt
+
+
+
+
+# Printing results
+print(f'Buy-and-hold strategy return and risk: {round(BnH*100,2)}% and {round(BnH_risk*100,2)}%, Max Drawdown: {BnH_drawdown*100:.2f}%, Sharpe Ratio: {BnH_sharpe:.2f}')
+print(f'MACD strategy return and risk: {round(MACD*100,2)}% and {round(MACD_risk*100,2)}%, Max Drawdown: {MACD_drawdown*100:.2f}%, Sharpe Ratio: {MACD_sharpe:.2f}')
