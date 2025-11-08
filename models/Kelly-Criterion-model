@@ -1,0 +1,76 @@
+import yfinance as yf
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Settings
+ticker = "BTC-USD"
+start_date = "2020-01-01"
+end_date = "2025-01-01"
+short_ma = 5
+long_ma = 12
+
+# Download historical data
+data = yf.download(ticker, start=start_date, end=end_date)
+data.dropna(inplace=True)
+
+# Technical indicators
+data['MA_short'] = data['Close'].rolling(short_ma).mean()
+data['MA_long'] = data['Close'].rolling(long_ma).mean()
+data['return'] = data['Close'].pct_change()
+
+# Strategy signal: Buy when short MA > long MA
+data['signal'] = (data['MA_short'] > data['MA_long']).astype(int)
+
+# Apply strategy: returns only when in position
+start = long_ma
+strategy_returns = data['return'][start+1:][data['signal'][start+1:] == 1]
+
+# Calculate Kelly Criterion
+wins = strategy_returns[strategy_returns > 0]
+losses = strategy_returns[strategy_returns <= 0]
+p = len(wins) / len(strategy_returns)
+q = 1 - p
+avg_win = wins.mean()
+avg_loss = -losses.mean()
+b = avg_win / avg_loss if avg_loss != 0 else 0
+kelly_fraction = (b * p - q) / b if b != 0 else 0
+
+# Simulate Kelly Portfolio
+capital_kelly = [1]
+for r in strategy_returns:
+    capital_kelly.append(capital_kelly[-1] * (1 + kelly_fraction * r))
+capital_kelly = pd.Series(capital_kelly, index=strategy_returns.index.insert(0, strategy_returns.index[0]))
+
+# Buy & Hold and Fixed Strategy
+bnh_returns = data['return'][start+1:]
+bnh_cum = pd.Series(np.cumprod(1 + bnh_returns), index=bnh_returns.index)
+
+fixed_returns = data['return'][start+1:] * data['signal'][start+1:]
+fixed_cum = pd.Series(np.cumprod(1 + fixed_returns), index=fixed_returns.index)
+
+# Drawdown calculation function
+def compute_drawdown(series):
+    peak = series.cummax()
+    drawdown = (series - peak) / peak
+    return drawdown
+
+dd_bnh = compute_drawdown(bnh_cum)
+dd_fixed = compute_drawdown(fixed_cum)
+dd_kelly = compute_drawdown(capital_kelly)
+
+# Plot Drawdowns
+plt.figure(figsize=(12, 6))
+plt.plot(dd_bnh, label="Buy & Hold", color="red", alpha=0.6)
+plt.plot(dd_fixed, label="Fixed-Size Strategy", color="blue", alpha=0.7)
+plt.plot(dd_kelly, label="Kelly-Sized Strategy", color="green", alpha=0.9)
+plt.title("Drawdown Comparison — BTC Strategy")
+plt.ylabel("Drawdown (%)")
+plt.xlabel("Date")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+print(f"Kelly Criterion Fraction: {kelly_fraction*100:.2f}%")
+print(f"avg_win: {avg_win*100:.2f}%")
+print(f"avg_loss: {avg_loss*100:.2f}%")
