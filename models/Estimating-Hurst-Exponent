@@ -2,7 +2,7 @@ import numpy as np
 import yfinance as yf
 import matplotlib.pyplot as plt
 import scipy.stats as sps
-import statsmodels.api as sm  # Fixed: was 'statsmodel'
+import statsmodels.api as sm 
 
 power = 10
 n = 2**power
