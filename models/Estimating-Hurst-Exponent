@@ -1,0 +1,61 @@
+import numpy as np
+import yfinance as yf
+import matplotlib.pyplot as plt
+import scipy.stats as sps
+import statsmodels.api as sm  # Fixed: was 'statsmodel'
+
+power = 10
+n = 2**power
+ticker = 'VRTX'
+start = '2000-01-01'
+end = '2025-01-01'
+data = yf.download(ticker, start, end)['Close']
+raw_data = data.copy()
+prices = np.array(data)[1:]
+returns = np.array(data)[1:] / np.array(data)[:-1] - 1
+hursts = np.array([])
+tstats = np.array([])
+pvalues = np.array([])
+
+for t in np.arange(n, len(returns) + 1):
+    data = returns[t - n:t]
+    X = np.arange(2, power + 1)
+    Y = np.array([])
+
+    for p in X:
+        m = 2**p
+        s = 2**(power - p)
+        rs_array = np.array([])
+
+        for i in np.arange(0, s):
+            subsample = data[i * m:(i + 1) * m]
+            mean = np.average(subsample)
+            deviate = np.cumsum(subsample - mean)
+            difference = max(deviate) - min(deviate)
+            stdev = np.std(subsample)
+            if stdev == 0:
+                continue
+            rescaled_range = difference / stdev
+            rs_array = np.append(rs_array, rescaled_range)
+
+        Y = np.append(Y, np.log2(np.average(rs_array)))
+
+    reg = sm.OLS(Y, sm.add_constant(X))
+    res = reg.fit()
+    hurst = res.params[1]
+    tstat = (res.params[1] - 0.5) / res.bse[1]
+    pvalue = 2 * (1 - sps.t.cdf(abs(tstat), res.df_resid))
+    hursts = np.append(hursts, hurst)
+    tstats = np.append(tstats, tstat)
+    pvalues = np.append(pvalues, pvalue)
+
+plt.figure(1)
+plt.rc('xtick', labelsize=8)
+plt.ylim(0.0, 0.8)
+plt.plot(raw_data.index[n:], hursts)
+plt.plot(raw_data.index[n:], np.ones(len(hursts)) * 0.5)
+plt.show()
+
+
+
+
