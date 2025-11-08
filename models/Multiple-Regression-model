@@ -1,0 +1,23 @@
+import numpy as np
+import yfinance as yf
+import matplotlib.pyplot as plt
+import statsmodels.api as sm
+
+#building the OLS Model
+data = yf.download(['JPM', 'WFC', 'BLK'], '2020-01-01','2025-01-01')['Close']
+returns = data.pct_change().dropna()
+Y = np.array(returns['JPM'])
+X = np.array(returns.drop(columns='JPM'))
+X = sm.add_constant(X)
+regression = sm.OLS(Y,X).fit()
+print(regression.summary())
+
+#visualization
+Y_pred = regression.predict(X)
+plt.figure(figsize=(10,5))
+plt.plot(Y, label = 'actual returns')
+plt.plot(Y_pred, label = 'predicted returns', alpha=0.7)
+plt.legend()
+plt.title('Actual vs Predicted Returns')
+plt.legend()
+plt.show()
