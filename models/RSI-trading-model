@@ -1,0 +1,70 @@
+import numpy as np
+import yfinance as yf
+import matplotlib.pyplot as plt
+
+#downloading stock data
+stock = 'KO'
+data = yf.download(stock, start='2016-01-01', end='2021-03-31')
+
+#specifying parameters for trading
+rsi_period = 14
+rsi_oversold = 30
+rsi_overbought = 70
+fee = 0.0005
+risk_free_rate = 0.02
+
+#coding technical analysis signals
+data['returns'] = data['Close'].pct_change()
+data['Up'] = np.maximum(data['Close'].diff(),0)
+data['Down'] = np.maximum(-data['Close'].diff(),0)
+data['RS'] = data['Up'].rolling(rsi_period).mean()/data['Down'].rolling(rsi_period).mean()
+data['RSI'] = 100 - 100/(1+data['RS'])
+
+#simulating trading strategies
+start = rsi_period
+data['signal'] = 1*(data['RSI'] < rsi_oversold) - 1*(data['RSI'] > rsi_overbought)
+BnH_return = np.array(data['returns'][start+1:])
+RSI_return = np.array(data['returns'][start+1:]) * np.array(data['signal'][start:-1 ]) - (fee * abs(data['signal'][start+1:]))
+BnH_cum_return = np.cumprod(1 + BnH_return)  # Correct cumulative return
+RSI_cum_return = np.cumprod(1 + RSI_return)
+
+BnH = np.prod(1+BnH_return)**(252/len(BnH_return))-1
+RSI = np.prod(1+RSI_return)**(252/len(RSI_return))-1
+BnH_risk = np.std(BnH_return)*(252)**(1/2)
+RSI_risk = np.std(RSI_return)*(252)**(1/2)
+
+# Drawdown Calculation
+def max_drawdown(returns):
+    cum_returns = np.cumprod(1 + returns)
+    peak = np.maximum.accumulate(cum_returns)
+    drawdown = (cum_returns - peak) / peak
+    return np.min(drawdown)  # Max drawdown is the lowest point
+
+BnH_drawdown = max_drawdown(BnH_return)
+RSI_drawdown = max_drawdown(RSI_return)
+
+# Sharpe Ratio Calculation
+def sharpe_ratio(returns, risk_free_rate):
+    excess_return = np.mean(returns) - (risk_free_rate / 252)  # Daily risk-free rate
+    return excess_return / np.std(returns) * np.sqrt(252)  # Annualized Sharpe ratio
+
+BnH_sharpe = sharpe_ratio(BnH_return, risk_free_rate)
+RSI_sharpe = sharpe_ratio(RSI_return, risk_free_rate)
+
+# Visualizing the results
+plt.figure(figsize=(12, 6))
+plt.plot(np.arange(len(BnH_cum_return)), BnH_cum_return, label="Buy & Hold", color='blue')
+plt.plot(np.arange(len(RSI_cum_return)), RSI_cum_return, label="RSI Strategy", color='red')
+plt.xlabel("Days")
+plt.ylabel("Cumulative Return")
+plt.title("Cumulative Return of Buy & Hold vs. RSI Strategy")
+plt.legend()
+plt.grid()
+plt.show()
+import numpy as np
+import yfinance as yf
+import matplotlib.pyplot as plt
+
+# Printing results
+print(f'Buy-and-hold strategy return and risk: {round(BnH*100,2)}% and {round(BnH_risk*100,2)}%, Max Drawdown: {BnH_drawdown*100:.2f}%, Sharpe Ratio: {BnH_sharpe:.2f}')
+print(f'RSI strategy return and risk: {round(RSI*100,2)}% and {round(RSI_risk*100,2)}%, Max Drawdown: {RSI_drawdown*100:.2f}%, Sharpe Ratio: {RSI_sharpe:.2f}')
